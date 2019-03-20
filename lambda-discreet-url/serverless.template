@@ -1,0 +1,118 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+  "Transform" : "AWS::Serverless-2016-10-31",
+  "Description" : "AWS Serverless API that exposes the add and get operations for a discreet url platform using Amazon DynamoDB.",
+  "Parameters" : {
+    "ShouldCreateTable" : {
+      "Type" : "String",        
+      "AllowedValues" : ["true", "false"],
+      "Description" : "If true then the DynamoDB url table will be created with the CloudFormation stack."
+    },  
+    "UrlTableName" : {
+        "Type" : "String",
+        "Description" : "Name of DynamoDB table used to store the url post. If left blank a new table will be created.",
+        "MinLength" : "0"
+    },
+    "ReadCapacity" : {
+        "Type" : "Number",
+        "Description" : "Read capacity for the DynamoDB url table.",
+        "Default" : "3",
+        "MinValue" : 1
+    },
+    "WriteCapacity" : {
+        "Type" : "Number",
+        "Description" : "Write capacity for the DynamoDB url table.",
+        "Default" : "3",
+        "MinValue" : 1
+    }
+  },
+
+  "Conditions" : {
+    "CreateUrlTable" : {"Fn::Equals" : [{"Ref" : "ShouldCreateTable"}, "true"]},
+	  "TableNameGenerated" : {"Fn::Equals" : [{"Ref" : "UrlTableName"}, ""]}
+  },
+
+  "Resources" : {
+
+    "GetUrl" : {
+      "Type" : "AWS::Serverless::Function",
+      "Properties": {
+        "Handler": "lambda-discreet-url::Lambda.Functions::GetUrlAsync",
+        "Runtime": "dotnetcore2.1",
+        "CodeUri": "",
+        "Description": "Function to get a url",
+        "MemorySize": 256,
+        "Timeout": 30,
+        "Role": null,
+        "Policies": [ "AWSLambdaFullAccess" ],
+        "Environment" : {
+          "Variables" : {
+            "UrlTable" : { "Fn::If" : ["CreateUrlTable", {"Ref":"UrlTable"}, { "Ref" : "UrlTableName" } ] }
+          }
+        },
+        "Events": {
+          "PutResource": {
+            "Type": "Api",
+            "Properties": {
+              "Path": "/{Id}",
+              "Method": "GET"
+            }
+          }
+        }
+      }
+    },
+    
+
+    "AddUrl" : {
+      "Type" : "AWS::Serverless::Function",
+      "Properties": {
+        "Handler": "lambda-discreet-url::Lambda.Functions::AddUrlAsync",
+        "Runtime": "dotnetcore2.1",
+        "CodeUri": "",
+        "Description": "Function to add a url",
+        "MemorySize": 256,
+        "Timeout": 30,
+        "Role": null,
+        "Policies": [ "AWSLambdaFullAccess" ],
+        "Environment" : {
+          "Variables" : {
+            "UrlTable" : { "Fn::If" : ["CreateUrlTable", {"Ref":"UrlTable"}, { "Ref" : "UrlTableName" } ] }
+          }
+        },
+        "Events": {
+          "PutResource": {
+            "Type": "Api",
+            "Properties": {
+              "Path": "/",
+              "Method": "PUT"
+            }
+          }
+        }
+      }
+    },
+
+    "UrlTable" : {
+        "Type" : "AWS::DynamoDB::Table",
+        "Condition" : "CreateUrlTable",
+        "Properties" : {
+            "TableName" : { "Fn::If" : ["TableNameGenerated", {"Ref" : "AWS::NoValue" }, { "Ref" : "UrlTableName" } ] },
+            "AttributeDefinitions" : [
+              {"AttributeName" : "Id", "AttributeType" : "S"}
+            ],
+            "KeySchema"            : [
+              {"AttributeName" : "Id", "KeyType" : "HASH"}
+            ],
+            "ProvisionedThroughput" : {
+                "ReadCapacityUnits" : { "Ref" : "ReadCapacity" },
+                "WriteCapacityUnits" : { "Ref" : "WriteCapacity" }
+            }
+        }
+    }
+  },
+
+  "Outputs" : {
+    "UrlTable" : {
+        "Value" : { "Fn::If" : ["CreateUrlTable", { "Ref": "UrlTable" }, { "Ref" : "UrlTableName" } ] }
+    }
+  }
+}
